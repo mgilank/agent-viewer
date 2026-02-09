@@ -242,8 +242,9 @@ async function spawnAgent(projectPath, prompt) {
   // Resolve to absolute path
   projectPath = path.resolve(projectPath);
 
-  const label = await generateSmartLabel(prompt);
-  const safeName = SPAWN_PREFIX + label.replace(/[^a-zA-Z0-9_-]/g, '-');
+  // Use fallback label immediately for fast spawn, then upgrade via LLM async
+  const quickLabel = fallbackLabel(prompt);
+  const safeName = SPAWN_PREFIX + quickLabel.replace(/[^a-zA-Z0-9_-]/g, '-');
 
   // Deduplicate if name exists
   let finalName = safeName;
@@ -260,7 +261,7 @@ async function spawnAgent(projectPath, prompt) {
   const claudeCmd = 'claude --chrome --dangerously-skip-permissions';
   const tmuxCmd = `tmux new-session -d -s ${finalName} -c "${projectPath}" '${claudeCmd}'`;
 
-  console.log(`[SPAWN] label=${label} name=${finalName}`);
+  console.log(`[SPAWN] quickLabel=${quickLabel} name=${finalName}`);
   console.log(`[SPAWN] projectPath=${projectPath}`);
   console.log(`[SPAWN] cmd: ${tmuxCmd}`);
 
@@ -276,7 +277,7 @@ async function spawnAgent(projectPath, prompt) {
   }, 1000);
 
   registry[finalName] = {
-    label,
+    label: quickLabel,
     projectPath,
     prompt,
     createdAt: Date.now(),
@@ -284,6 +285,17 @@ async function spawnAgent(projectPath, prompt) {
     initialPromptSent: false,
   };
   saveRegistry();
+
+  // Async: upgrade label via LLM in background (UI updates via SSE)
+  generateSmartLabel(prompt).then(smartLabel => {
+    if (smartLabel !== quickLabel && registry[finalName]) {
+      console.log(`[SPAWN] label upgraded: "${quickLabel}" → "${smartLabel}"`);
+      registry[finalName].label = smartLabel;
+      saveRegistry();
+    }
+  }).catch(e => {
+    console.log(`[SPAWN] async label upgrade failed, keeping fallback: ${e.message}`);
+  });
 
   if (prompt) {
     setTimeout(() => {
@@ -373,21 +385,54 @@ function detectAgentState(sessionName, sessionsCache) {
     return 'idle';
   }
 
+  // Check last several lines for signs Claude is waiting for user input
+  // (permission prompts, questions, plan approvals, etc.)
+  const recentLines = lines.slice(-8).map(l => l.trim()).join('\n');
+
+  const waitingForInputPatterns = [
+    /Allow\s+(once|always)/i,              // Permission prompt options
+    /do you want to proceed/i,             // Plan/action approval
+    /shall I proceed/i,                    // Asking to proceed
+    /should I proceed/i,                   // Asking to proceed
+    /approve|deny|reject/i,               // Approval prompt
+    /yes.*no.*always allow/i,             // Permission choice UI
+    /\(y\/n\)/i,                           // y/n prompt
+    /enter a value|enter to confirm/i,     // Input prompt
+    /select.*option/i,                     // Selection prompt
+    /choose.*from/i,                       // Choice prompt
+    /press enter to send/i,               // Message input prompt
+  ];
+
+  if (waitingForInputPatterns.some(p => p.test(recentLines))) {
+    return 'idle';
+  }
+
   return 'running';
 }
 
-function getLastActivity(sessionName) {
-  const rawOutput = capturePaneOutput(sessionName, 10);
-  const output = stripAnsi(rawOutput);
-  const lines = output.split('\n').filter(l => l.trim() !== '');
+const NOISE_PATTERNS = [
+  /bypass permissions/i,
+  /shift.?tab to cycle/i,
+  /ctrl.?t to hide/i,
+  /press enter to send/i,
+  /waiting for input/i,
+  /^[>❯$]\s*$/,
+  /^\s*$/,
+];
 
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim();
-    if (line && !/^[>❯$]\s*$/.test(line)) {
-      return line;
-    }
+function getLastActivity(sessionName) {
+  const rawOutput = capturePaneOutput(sessionName, 30);
+  const lines = rawOutput.split('\n');
+
+  // Collect last 3 meaningful lines (raw, with ANSI)
+  const meaningful = [];
+  for (let i = lines.length - 1; i >= 0 && meaningful.length < 3; i--) {
+    const clean = stripAnsi(lines[i]).trim();
+    if (!clean) continue;
+    if (NOISE_PATTERNS.some(p => p.test(clean))) continue;
+    meaningful.unshift(lines[i]);
   }
-  return '';
+  return meaningful.join('\n');
 }
 
 function buildAgentInfo(sessionName, sessionsCache) {
@@ -395,6 +440,17 @@ function buildAgentInfo(sessionName, sessionsCache) {
   const state = detectAgentState(sessionName, sessionsCache);
 
   if (registry[sessionName]) {
+    // If transitioning to completed, kill the tmux session so it doesn't linger
+    if (state === 'completed' && registry[sessionName].state !== 'completed') {
+      try {
+        execSync(`tmux kill-session -t ${sessionName} 2>/dev/null`, {
+          encoding: 'utf-8', timeout: 5000
+        });
+      } catch {
+        // Session might already be dead
+      }
+      registry[sessionName].completedAt = registry[sessionName].completedAt || Date.now();
+    }
     registry[sessionName].state = state;
     if (state === 'idle' && !registry[sessionName].idleSince) {
       registry[sessionName].idleSince = Date.now();
@@ -620,6 +676,41 @@ app.delete('/api/agents/:name', (req, res) => {
   try {
     killAgent(req.params.name);
     res.json({ status: 'killed' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Remove a completed agent from the registry (cleanup)
+app.delete('/api/agents/:name/cleanup', (req, res) => {
+  try {
+    const { name } = req.params;
+    if (!registry[name]) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    if (registry[name].state !== 'completed') {
+      return res.status(400).json({ error: 'Agent is not completed' });
+    }
+    delete registry[name];
+    saveRegistry();
+    res.json({ status: 'cleaned' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Remove all completed agents from the registry
+app.delete('/api/cleanup/completed', (req, res) => {
+  try {
+    let count = 0;
+    for (const name of Object.keys(registry)) {
+      if (registry[name].state === 'completed') {
+        delete registry[name];
+        count++;
+      }
+    }
+    saveRegistry();
+    res.json({ status: 'cleaned', count });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
