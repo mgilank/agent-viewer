@@ -380,6 +380,8 @@ function detectAgentState(sessionName, sessionsCache) {
     /anything.*else/i,
     /can i help/i,
     /waiting for input/i,
+    /bypass permissions/i,
+    /shift.?tab to cycle/i,
   ];
 
   if (idlePatterns.some(p => p.test(lastLine))) {
