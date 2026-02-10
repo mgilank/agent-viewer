@@ -96,7 +96,7 @@ http://<machine-name>:4200
 - **Smart project path** — When a project tab is selected, the spawn modal automatically pre-fills that project's path.
 - **Kanban columns** — Agents are sorted into Running, Idle, and Completed columns based on their state.
 - **Auto-discovery** — Existing tmux sessions running Claude are automatically detected and added to the board.
-- **Live output** — Click `VIEW OUTPUT` to see the full terminal output with ANSI color rendering.
+- **Live output** — Click `VIEW OUTPUT` to see the full terminal output with ANSI color rendering, or click `EXPAND` on any card to show output inline.
 - **Send messages** — Type in the prompt field on any card and press `Enter` to send follow-up messages to an agent (`Shift+Enter` inserts a new line).
 - **File uploads** — Drag and drop files onto a card or click `FILE` to send files to an agent.
 - **Re-spawn** — Completed agents can be re-spawned with a new prompt from the same project directory.

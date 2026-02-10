@@ -1,16 +1,9 @@
 [
   {
-    "id": "mlgn4bof",
-    "name": "33.saham-buddy",
-    "projectPath": "/Volumes/Vibe_NVMe/Code/33.saham-buddy",
-    "color": "#00ff00",
-    "createdAt": 1770730330911
-  },
-  {
-    "id": "mlgopw4g",
-    "name": "bench check",
-    "projectPath": "/Volumes/Vibe_NVMe/D3V/1.ujione-kelas-sveltekit",
-    "color": "#ff79c6",
-    "createdAt": 1770733016800
+    "id": "mlgpyj96",
+    "name": "agentviewer",
+    "projectPath": "/Volumes/Vibe_NVMe/D3V/AgentViewer",
+    "color": "#ffaa00",
+    "createdAt": 1770735099642
   }
 ]

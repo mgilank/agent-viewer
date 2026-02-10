@@ -13,10 +13,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 const PORT = process.env.PORT || 4200;
 const REGISTRY_FILE = path.join(__dirname, '.agent-registry.json');
 const TABS_FILE = path.join(__dirname, '.project-tabs.json');
+const TELEGRAM_CONFIG_FILE = path.join(__dirname, '.telegram-config.json');
 const POLL_INTERVAL = 3000;
 const SPAWN_PREFIX = 'agent-';
 
 let tabsRegistry = [];
+let telegramConfig = { botToken: '', chatId: '', enabled: false };
 
 // ─── Agent Registry ──────────────────────────────────────────────────────────
 
@@ -47,19 +49,97 @@ function saveRegistry() {
 function loadTabsRegistry() {
   try {
     if (fs.existsSync(TABS_FILE)) {
-      tabsRegistry = JSON.parse(fs.readFileSync(TABS_FILE, 'utf-8'));
+      const content = fs.readFileSync(TABS_FILE, 'utf-8');
+
+      // Handle empty file
+      if (!content || content.trim() === '') {
+        console.log('[TABS] Empty tabs file, initializing with empty array');
+        tabsRegistry = [];
+        return;
+      }
+
+      const parsed = JSON.parse(content);
+
+      // Ensure we always have an array
+      if (!Array.isArray(parsed)) {
+        console.error('[TABS] Invalid tabs file format (not an array), resetting');
+        tabsRegistry = [];
+        return;
+      }
+
+      tabsRegistry = parsed;
+      console.log(`[TABS] Loaded ${tabsRegistry.length} tab(s) from ${TABS_FILE}`);
+    } else {
+      console.log('[TABS] No tabs file found, starting with empty registry');
+      tabsRegistry = [];
     }
   } catch (e) {
-    console.error('Failed to load tabs registry:', e.message);
+    console.error('[TABS] Failed to load tabs registry:', e.message);
+    console.log('[TABS] Initializing with empty array');
     tabsRegistry = [];
   }
 }
 
 function saveTabsRegistry() {
   try {
-    fs.writeFileSync(TABS_FILE, JSON.stringify(tabsRegistry, null, 2));
+    // Ensure tabsRegistry is always an array
+    if (!Array.isArray(tabsRegistry)) {
+      console.error('[TABS] Invalid tabsRegistry, resetting to empty array');
+      tabsRegistry = [];
+    }
+
+    const content = JSON.stringify(tabsRegistry, null, 2);
+
+    // Use atomic write pattern: write to temp file, then rename
+    // This prevents file corruption if write is interrupted
+    const tmpFile = TABS_FILE + '.tmp';
+    fs.writeFileSync(tmpFile, content, 'utf-8');
+
+    // On Windows, the destination file must be removed before rename
+    // On Unix, fs.rename automatically overwrites
+    if (fs.existsSync(TABS_FILE)) {
+      fs.unlinkSync(TABS_FILE);
+    }
+
+    fs.renameSync(tmpFile, TABS_FILE);
+
+    console.log(`[TABS] Saved ${tabsRegistry.length} tab(s) to ${TABS_FILE}`);
   } catch (e) {
-    console.error('Failed to save tabs registry:', e.message);
+    console.error('[TABS] Failed to save tabs registry:', e.message);
+  }
+}
+
+// ─── Telegram Config ─────────────────────────────────────────────────────────
+
+function loadTelegramConfig() {
+  try {
+    if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
+      const content = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf-8');
+      if (content && content.trim() !== '') {
+        telegramConfig = JSON.parse(content);
+        console.log('[TELEGRAM] Config loaded');
+      }
+    }
+  } catch (e) {
+    console.error('[TELEGRAM] Failed to load config:', e.message);
+    telegramConfig = { botToken: '', chatId: '', enabled: false };
+  }
+}
+
+function saveTelegramConfig() {
+  try {
+    const content = JSON.stringify(telegramConfig, null, 2);
+    const tmpFile = TELEGRAM_CONFIG_FILE + '.tmp';
+    fs.writeFileSync(tmpFile, content, 'utf-8');
+
+    if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
+      fs.unlinkSync(TELEGRAM_CONFIG_FILE);
+    }
+
+    fs.renameSync(tmpFile, TELEGRAM_CONFIG_FILE);
+    console.log('[TELEGRAM] Config saved');
+  } catch (e) {
+    console.error('[TELEGRAM] Failed to save config:', e.message);
   }
 }
 
@@ -457,6 +537,14 @@ function detectAgentState(sessionName, sessionsCache) {
   const pid = getSessionPid(sessionName);
   if (!isProcessAlive(pid)) return 'completed';
 
+  const ageMs = Date.now() - (reg.createdAt || 0);
+
+  // Spawn grace period: treat newly spawned agents as running for 15 seconds
+  // This prevents premature idle detection during Claude startup
+  if (ageMs < 15000) {
+    return 'running';
+  }
+
   // Grace period: if a message was recently sent, treat as running
   // (Claude may not have started producing output yet)
   if (reg.lastMessageSentAt && (Date.now() - reg.lastMessageSentAt) < 10000) {
@@ -573,10 +661,40 @@ function buildAgentInfo(sessionName, sessionsCache) {
         // Session might already be dead
       }
       registry[sessionName].completedAt = registry[sessionName].completedAt || Date.now();
+
+      // Send Telegram notification (async, non-blocking)
+      const agentInfo = {
+        name: sessionName,
+        label: registry[sessionName].label || sessionName,
+        projectPath: registry[sessionName].projectPath || '',
+        prompt: registry[sessionName].prompt || '',
+        createdAt: registry[sessionName].createdAt || 0,
+        completedAt: registry[sessionName].completedAt,
+      };
+      setImmediate(() => {
+        sendTelegramNotification(agentInfo).catch(err => {
+          console.error('[TELEGRAM] Notification failed:', err.message);
+        });
+      });
     }
     registry[sessionName].state = state;
     if (state === 'idle' && !registry[sessionName].idleSince) {
       registry[sessionName].idleSince = Date.now();
+
+      // Send Telegram notification when transitioning to idle (async, non-blocking)
+      const agentInfo = {
+        name: sessionName,
+        label: registry[sessionName].label || sessionName,
+        projectPath: registry[sessionName].projectPath || '',
+        prompt: registry[sessionName].prompt || '',
+        createdAt: registry[sessionName].createdAt || 0,
+        idleSince: registry[sessionName].idleSince,
+      };
+      setImmediate(() => {
+        sendTelegramNotification(agentInfo, null, null, 'idle').catch(err => {
+          console.error('[TELEGRAM] Idle notification failed:', err.message);
+        });
+      });
     } else if (state !== 'idle') {
       delete registry[sessionName].idleSince;
       delete registry[sessionName].lastMessageSentAt;
@@ -655,6 +773,89 @@ function getAllAgents() {
 
   saveRegistry();
   return agents;
+}
+
+// ─── Telegram Notification ─────────────────────────────────────────────────────
+
+async function sendTelegramNotification(agent, botToken, chatId, notificationType = 'completed') {
+  const token = botToken || telegramConfig.botToken;
+  const chat = chatId || telegramConfig.chatId;
+
+  if (!token || !chat || !telegramConfig.enabled) {
+    return { success: false, error: 'Telegram not configured' };
+  }
+
+  // Calculate duration based on notification type
+  const duration = agent.completedAt
+    ? Math.round((agent.completedAt - agent.createdAt) / 1000)
+    : agent.idleSince
+    ? Math.round((agent.idleSince - agent.createdAt) / 1000)
+    : 0;
+
+  // Truncate prompt safely and escape any problematic characters
+  const safePrompt = (agent.prompt || '').substring(0, 300)
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .trim();
+
+  // Different message format based on notification type
+  const message = notificationType === 'idle'
+    ? `⏸️ Task Waiting for Input
+
+Task: ${agent.label || 'unknown'}
+Project: ${agent.projectPath || 'unknown'}
+Duration: ${duration}s
+
+Prompt:
+${safePrompt}${agent.prompt.length > 300 ? '...' : ''}`
+    : `✅ Task Completed
+
+Task: ${agent.label || 'unknown'}
+Project: ${agent.projectPath || 'unknown'}
+Duration: ${duration}s
+
+Prompt:
+${safePrompt}${agent.prompt.length > 300 ? '...' : ''}`;
+
+  console.log(`[TELEGRAM] Sending ${notificationType} notification, message length:`, message.length);
+
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({
+      chat_id: chat,
+      text: message,
+    });
+
+    const options = {
+      hostname: 'api.telegram.org',
+      path: `/bot${token}/sendMessage`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          console.log('[TELEGRAM] Notification sent successfully');
+          resolve({ success: true });
+        } else {
+          console.error(`[TELEGRAM] Failed: ${res.statusCode} ${data}`);
+          resolve({ success: false, error: `HTTP ${res.statusCode}` });
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      console.error('[TELEGRAM] Request failed:', e.message);
+      resolve({ success: false, error: e.message });
+    });
+
+    req.write(postData);
+    req.end();
+  });
 }
 
 // ─── API Routes ──────────────────────────────────────────────────────────────
@@ -882,6 +1083,24 @@ app.delete('/api/cleanup/completed', (req, res) => {
   }
 });
 
+// Kill all idle agents
+app.delete('/api/kill/idle', (req, res) => {
+  try {
+    let count = 0;
+    for (const name of Object.keys(registry)) {
+      if (registry[name].state === 'idle') {
+        killAgent(name);
+        delete registry[name];
+        count++;
+      }
+    }
+    saveRegistry();
+    res.json({ status: 'killed', count });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/agents/:name/output', (req, res) => {
   try {
     const raw = capturePaneOutput(req.params.name, 200);
@@ -990,6 +1209,76 @@ app.put('/api/tabs/:id', (req, res) => {
   }
 });
 
+// ─── Telegram Config API ──────────────────────────────────────────────────────
+
+app.get('/api/telegram-config', (req, res) => {
+  try {
+    // Return config without exposing the full token in logs
+    const safeConfig = {
+      enabled: telegramConfig.enabled,
+      botToken: telegramConfig.botToken ? '***' : '',
+      chatId: telegramConfig.chatId,
+    };
+    res.json(safeConfig);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/telegram-config', (req, res) => {
+  try {
+    const { botToken, chatId, enabled } = req.body;
+
+    // Only update botToken if explicitly provided (not undefined)
+    // Empty string '' means clear the token, undefined means keep existing
+    if (botToken !== undefined) {
+      telegramConfig.botToken = botToken;
+    }
+    // If chatId is provided (even empty), update it
+    if (chatId !== undefined) {
+      telegramConfig.chatId = chatId;
+    }
+    if (enabled !== undefined) {
+      telegramConfig.enabled = enabled;
+    }
+
+    saveTelegramConfig();
+    res.json({ status: 'saved', config: { enabled: telegramConfig.enabled, chatId: telegramConfig.chatId } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/telegram/test', async (req, res) => {
+  try {
+    const { botToken, chatId } = req.body;
+
+    // If no credentials provided, use saved config
+    const token = botToken || telegramConfig.botToken;
+    const chat = chatId || telegramConfig.chatId;
+
+    if (!token || !chat) {
+      return res.status(400).json({ error: 'Telegram not configured. Please enter bot token and chat ID.' });
+    }
+
+    const result = await sendTelegramNotification({
+      label: 'test-task',
+      projectPath: process.cwd(),
+      prompt: 'This is a test notification from Agent Viewer',
+      createdAt: Date.now(),
+      completedAt: Date.now(),
+    }, token, chat);
+
+    if (result.success) {
+      res.json({ status: 'sent' });
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── SSE Endpoint ────────────────────────────────────────────────────────────
 
 const sseClients = new Set();
@@ -1026,6 +1315,7 @@ function broadcastAgents() {
 
 loadRegistry();
 loadTabsRegistry();
+loadTelegramConfig();
 
 app.listen(PORT, HOST === 'localhost' ? '127.0.0.1' : HOST, () => {
   console.log(`\n  AGENT VIEWER`);

@@ -234,6 +234,25 @@
       color: var(--bg);
     }
 
+    .settings-btn {
+      background: none;
+      border: 2px solid var(--amber);
+      color: var(--amber);
+      padding: 8px 16px;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+
+    .settings-btn:hover {
+      background: var(--amber);
+      color: var(--bg);
+    }
+
     /* ─── KANBAN BOARD ──────────────────────────────────────────────────── */
     .board {
       display: flex;
@@ -403,6 +422,24 @@
       border: 1px solid var(--dim);
     }
 
+    .card-titlebar .expand-btn {
+      background: none;
+      border: 1px solid var(--amber);
+      color: var(--amber);
+      padding: 2px 8px;
+      font-size: 10px;
+      font-family: var(--font);
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.1s;
+    }
+
+    .card-titlebar .expand-btn:hover {
+      background: var(--amber);
+      color: var(--bg);
+    }
+
     .card-body {
       padding: 10px 12px;
       font-size: 11px;
@@ -429,6 +466,18 @@
       word-break: break-all;
       max-height: 80px;
       overflow-y: hidden;
+      line-height: 1.5;
+    }
+
+    .card.expanded .card-body .activity {
+      max-height: 300px;
+      overflow-y: auto;
+      border-color: var(--amber);
+    }
+
+    .card.expanded .card-body .activity.activity-full {
+      /* When showing full output, use full content */
+    }
       line-height: 1.5;
     }
 
@@ -553,6 +602,16 @@
 
     .card-actions .btn-clear:hover {
       background: var(--dim);
+      color: var(--bg);
+    }
+
+    .card-actions .btn-expand {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    .card-actions .btn-expand:hover {
+      background: var(--amber);
       color: var(--bg);
     }
 
@@ -1292,6 +1351,12 @@
         padding: 3px 8px;
       }
 
+      .card-titlebar .expand-btn {
+        font-size: 10px;
+        padding: 4px 10px;
+        min-height: 32px;
+      }
+
       .card-body {
         padding: 12px 14px;
         font-size: 12px;
@@ -1502,6 +1567,7 @@
     </div>
     <button class="spawn-btn" onclick="openSpawnModal()">[+ SPAWN] <span
         style="color:var(--dim);font-size:10px;font-weight:400">(N)</span></button>
+    <button class="settings-btn" onclick="openTelegramSettings()" title="Telegram notifications">[⚙ SETTINGS]</button>
   </header>
 
   <!-- ─── PROJECT TABS ───────────────────────────────────────────────────── -->
@@ -1545,6 +1611,7 @@
       <div class="column-header">
         <span class="indicator"></span>
         IDLE <span class="count" id="idleCount">[0]</span>
+        <button class="clear-all-btn" id="stopAllIdleBtn" onclick="confirmStopAllIdle()" style="display:none">STOP ALL</button>
       </div>
       <div class="column-body" id="idleColumn">
         <div class="empty-state">NO IDLE AGENTS</div>
@@ -1676,6 +1743,44 @@
     </div>
   </div>
 
+  <!-- ─── TELEGRAM SETTINGS MODAL ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="telegramSettingsModal">
+    <div class="modal">
+      <div class="modal-header">TELEGRAM NOTIFICATIONS</div>
+      <div class="modal-body">
+        <div class="form-field" style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="telegramEnabled" style="width:auto;flex:none;" />
+          <label for="telegramEnabled" style="margin:0;cursor:pointer;">ENABLE NOTIFICATIONS</label>
+        </div>
+        <div class="form-field">
+          <label>BOT TOKEN</label>
+          <div class="input-row">
+            <span class="input-prefix">&gt;_</span>
+            <input type="text" id="telegramBotToken" placeholder="123456789:ABCdef..." autocomplete="off" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label>CHAT ID</label>
+          <div class="input-row">
+            <span class="input-prefix">&gt;_</span>
+            <input type="text" id="telegramChatId" placeholder="123456789" autocomplete="off" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label style="color:var(--dim);font-size:10px;font-weight:400;line-height:1.4;">
+            Get bot token from @BotFather on Telegram.<br>
+            Get your chat ID from @userinfobot.
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="testTelegram()" style="border-color:var(--amber);color:var(--amber);">TEST</button>
+        <button class="btn-cancel" onclick="closeTelegramSettings()">CANCEL</button>
+        <button class="btn-spawn" onclick="saveTelegramSettings()">SAVE</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ─── OUTPUT VIEWER ──────────────────────────────────────────────── -->
   <div class="output-overlay" id="outputOverlay">
     <div class="output-header">
@@ -1703,6 +1808,7 @@
   </div>
 
   <script src="/prompt-key-utils.js"></script>
+  <script src="/expanded-card-utils.js"></script>
   <script>
     // ─── STATE ─────────────────────────────────────────────────────────────
     let agents = [];
@@ -1772,6 +1878,18 @@
         }
       }
 
+      // Preserve expanded card state GLOBALLY before any rendering
+      const expandedSnapshots = new Map();
+      for (const agentName of expandedCards) {
+        const promptInput = document.getElementById(`card-prompt-${agentName}`);
+        const activityEl = document.getElementById(`activity-${agentName}`);
+        expandedSnapshots.set(agentName, {
+          promptValue: promptInput ? promptInput.value : '',
+          activityHtml: activityEl ? activityEl.innerHTML : '',
+          activityScrollTop: activityEl ? activityEl.scrollTop : 0,
+        });
+      }
+
       const running = allAgents.filter(a => a.state === 'running');
       const idle = allAgents.filter(a => a.state === 'idle');
       const completed = allAgents.filter(a => a.state === 'completed');
@@ -1784,8 +1902,23 @@
       renderColumn('idleColumn', idle, 'NO IDLE AGENTS');
       renderColumn('completedColumn', completed, 'NO COMPLETED AGENTS');
 
+      // Restore expanded card state GLOBALLY after all columns rendered
+      for (const [agentName, snapshot] of expandedSnapshots) {
+        const promptInput = document.getElementById(`card-prompt-${agentName}`);
+        if (promptInput) {
+          promptInput.value = snapshot.promptValue;
+        }
+        const activityEl = document.getElementById(`activity-${agentName}`);
+        if (activityEl && snapshot.activityHtml) {
+          activityEl.innerHTML = snapshot.activityHtml;
+          activityEl.scrollTop = snapshot.activityScrollTop;
+        }
+      }
+
       // Show/hide clear all button
       document.getElementById('clearAllBtn').style.display = completed.length > 0 ? '' : 'none';
+      // Show/hide stop all idle button
+      document.getElementById('stopAllIdleBtn').style.display = idle.length > 0 ? '' : 'none';
 
       // Update mobile tab counts
       updateMobileTabs();
@@ -1807,7 +1940,7 @@
       const el = document.getElementById(columnId);
 
       // Preserve focused textarea state before re-render
-      const focused = el.querySelector('textarea:focus');
+      const focused = el.querySelector('textarea:focus, input:focus');
       let focusedId = null;
       let focusedValue = null;
       let focusedSelStart = null;
@@ -1826,16 +1959,18 @@
 
       el.innerHTML = columnAgents.map(a => renderCard(a)).join('');
 
-      // Restore focused textarea state after re-render
+      // Restore focused textarea/input state after re-render
       if (focusedId) {
         const restored = document.getElementById(focusedId);
         if (restored) {
           restored.value = focusedValue;
           restored.focus();
-          restored.selectionStart = focusedSelStart;
-          restored.selectionEnd = focusedSelEnd;
+          if (focusedSelStart !== null) restored.selectionStart = focusedSelStart;
+          if (focusedSelEnd !== null) restored.selectionEnd = focusedSelEnd;
         }
       }
+
+      // Note: Expanded card state is now preserved globally in renderBoard()
     }
 
     function renderCard(agent) {
@@ -1843,6 +1978,7 @@
       const idleFor = agent.idleSince ? formatDuration(Date.now() - agent.idleSince) : '';
       const projectName = agent.projectPath ? agent.projectPath.split('/').filter(Boolean).pop() : '--';
       const lastActHtml = ansiToHtml(agent.lastActivity || '');
+      const isExpanded = expandedCards.has(agent.name);
 
       let metaLines = '';
       metaLines += `<div class="meta">PROJECT: <span>${escapeHtml(projectName)}</span></div>`;
@@ -1856,7 +1992,7 @@
       }
 
       const activityBlock = lastActHtml
-        ? `<div class="activity">${lastActHtml}</div>`
+        ? `<div class="activity" id="activity-${agent.name}" data-last-activity="${escapeHtml(agent.lastActivity || '')}">${lastActHtml}</div>`
         : '';
 
       // Prompt input for all agents
@@ -1911,14 +2047,17 @@
         : '';
 
       return `
-    <div class="card" data-state="${agent.state}" data-name="${agent.name}"
+    <div class="card${isExpanded ? ' expanded' : ''}" data-state="${agent.state}" data-name="${agent.name}"
          draggable="true"
          ondragstart="onDragStart(event, '${agent.name}')"
          ondragend="onDragEnd(event)"
          ${dropHandlers}>
       <div class="card-titlebar">
         <span>${escapeHtml(agent.label)}</span>
-        <span class="state-badge">${agent.state.toUpperCase()}</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="expand-btn" onclick="event.stopPropagation();toggleCardExpand('${agent.name}')">${isExpanded ? 'COLLAPSE' : 'EXPAND'}</button>
+          <span class="state-badge">${agent.state.toUpperCase()}</span>
+        </div>
       </div>
       <div class="card-body">
         ${metaLines}
@@ -2101,6 +2240,8 @@
 
     // ─── CLEANUP ───────────────────────────────────────────────────────────
     async function cleanupAgent(agentName) {
+      // Remove from expanded cards if present
+      expandedCards.delete(agentName);
       try {
         await fetch(`/api/agents/${agentName}/cleanup`, { method: 'DELETE' });
         fetchAgents();
@@ -2130,6 +2271,23 @@
       pendingConfirm = () => cleanupAllCompleted();
       document.getElementById('confirmMessage').textContent = `CLEAR ALL ${count} COMPLETED AGENT${count !== 1 ? 'S' : ''}?`;
       document.getElementById('confirmBtn').textContent = 'CLEAR ALL';
+      document.getElementById('confirmOverlay').classList.add('active');
+    }
+
+    async function stopAllIdle() {
+      try {
+        await fetch('/api/kill/idle', { method: 'DELETE' });
+        fetchAgents();
+      } catch (e) {
+        console.error('Stop all idle error:', e);
+      }
+    }
+
+    function confirmStopAllIdle() {
+      const count = agents.filter(a => a.state === 'idle').length;
+      pendingConfirm = () => stopAllIdle();
+      document.getElementById('confirmMessage').textContent = `STOP ALL ${count} IDLE AGENT${count !== 1 ? 'S' : ''}?`;
+      document.getElementById('confirmBtn').textContent = 'STOP ALL';
       document.getElementById('confirmOverlay').classList.add('active');
     }
 
@@ -2192,6 +2350,127 @@
         }
       } catch (e) {
         console.error('Send from output error:', e);
+        alert('Failed to send message: ' + e.message);
+        input.value = message; // Restore message on error
+      }
+    }
+
+    // ─── INLINE CARD OUTPUT EXPAND ─────────────────────────────────────────
+    const expandedCards = new Set(); // agentNames that are expanded
+    const expandInProgress = new Set(); // Track which cards are currently expanding
+    const originalActivityContent = new Map(); // Store original activity content for collapse
+
+    async function toggleCardExpand(agentName) {
+      // Prevent multiple simultaneous toggles
+      if (expandInProgress.has(agentName)) {
+        return;
+      }
+
+      const isCurrentlyExpanded = expandedCards.has(agentName);
+
+      if (isCurrentlyExpanded) {
+        // Collapse - restore original activity content
+        expandedCards.delete(agentName);
+        expandInProgress.add(agentName);
+        try {
+          const card = document.querySelector(`[data-name="${agentName}"]`);
+          if (card) {
+            card.classList.remove('expanded');
+            const expandBtn = card.querySelector('.expand-btn');
+            if (expandBtn) expandBtn.textContent = 'EXPAND';
+
+            // Restore original activity content
+            const activityEl = document.getElementById(`activity-${agentName}`);
+            if (activityEl && originalActivityContent.has(agentName)) {
+              activityEl.innerHTML = originalActivityContent.get(agentName);
+              activityEl.scrollTop = 0;
+            }
+          }
+        } finally {
+          expandInProgress.delete(agentName);
+        }
+      } else {
+        // Expand - fetch and show full output
+        expandedCards.add(agentName);
+        expandInProgress.add(agentName);
+        try {
+          const card = document.querySelector(`[data-name="${agentName}"]`);
+          if (card) {
+            card.classList.add('expanded');
+            const expandBtn = card.querySelector('.expand-btn');
+            if (expandBtn) expandBtn.textContent = 'COLLAPSE';
+
+            // Store original content before replacing
+            const activityEl = document.getElementById(`activity-${agentName}`);
+            if (activityEl && !originalActivityContent.has(agentName)) {
+              originalActivityContent.set(agentName, activityEl.innerHTML);
+            }
+          }
+          await updateActivityOutput(agentName);
+          // Verify state after async operation
+          if (!expandedCards.has(agentName)) {
+            // State was lost during async, restore it
+            expandedCards.add(agentName);
+            const card2 = document.querySelector(`[data-name="${agentName}"]`);
+            if (card2) {
+              card2.classList.add('expanded');
+              const btn2 = card2.querySelector('.expand-btn');
+              if (btn2) btn2.textContent = 'COLLAPSE';
+            }
+          }
+        } finally {
+          expandInProgress.delete(agentName);
+        }
+      }
+    }
+
+    async function updateActivityOutput(agentName) {
+      // Fetch first, then get element (in case it was re-rendered during fetch)
+      let data;
+      try {
+        const res = await fetch(`/api/agents/${agentName}/output`);
+        data = await res.json();
+      } catch (e) {
+        console.error('Activity output fetch error:', e);
+        return;
+      }
+
+      // Get fresh element reference after fetch
+      const activityEl = document.getElementById(`activity-${agentName}`);
+      if (!activityEl) {
+        return;
+      }
+
+      const savedScrollTop = activityEl.scrollTop;
+      activityEl.innerHTML = data.raw ? ansiToHtml(data.raw) : escapeHtml(data.output || '(no output)');
+      activityEl.scrollTop = savedScrollTop;
+    }
+
+    async function sendFromCard(agentName) {
+      const input = document.getElementById(`card-prompt-${agentName}`);
+      if (!input) return;
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      try {
+        const res = await fetch(`/api/agents/${agentName}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert('Error: ' + data.error);
+          input.value = message; // Restore message on error
+        } else if (data.status === 'respawned') {
+          console.log('Agent respawned successfully');
+        }
+        // Refresh activity immediately after sending if expanded
+        if (expandedCards.has(agentName)) {
+          await updateActivityOutput(agentName);
+        }
+      } catch (e) {
+        console.error('Send from card error:', e);
         alert('Failed to send message: ' + e.message);
         input.value = message; // Restore message on error
       }
@@ -2477,6 +2756,109 @@
       }
     }
 
+    // ─── TELEGRAM SETTINGS ─────────────────────────────────────────────────────
+    // Store the original config when modal opens to detect changes
+    let originalTelegramConfig = { botToken: '', chatId: '', enabled: false };
+
+    async function openTelegramSettings() {
+      try {
+        const res = await fetch('/api/telegram-config');
+        const config = await res.json();
+        originalTelegramConfig = { ...config };
+        document.getElementById('telegramEnabled').checked = config.enabled || false;
+        // Show masked token if exists, otherwise empty
+        document.getElementById('telegramBotToken').value = config.botToken === '***' ? '***' : (config.botToken || '');
+        document.getElementById('telegramChatId').value = config.chatId || '';
+      } catch (e) {
+        console.error('Failed to load telegram config:', e);
+      }
+      document.getElementById('telegramSettingsModal').classList.add('active');
+    }
+
+    function closeTelegramSettings() {
+      document.getElementById('telegramSettingsModal').classList.remove('active');
+    }
+
+    async function saveTelegramSettings() {
+      try {
+        const botToken = document.getElementById('telegramBotToken').value.trim();
+        const chatId = document.getElementById('telegramChatId').value.trim();
+        const enabled = document.getElementById('telegramEnabled').checked;
+
+        // Build payload - only include fields that changed or are intentionally set
+        const payload = { enabled };
+
+        // Handle botToken: preserve existing if still '***' or empty (and we had one before)
+        if (botToken && botToken !== '***') {
+          // User entered a new token
+          payload.botToken = botToken;
+        } else if (botToken === '' && originalTelegramConfig.botToken !== '***' && !originalTelegramConfig.botToken) {
+          // No token existed before, explicitly set to empty
+          payload.botToken = '';
+        }
+        // If botToken is '***' or empty (and we had one), don't include it - backend preserves existing
+
+        if (chatId !== undefined) {
+          payload.chatId = chatId;
+        }
+
+        const res = await fetch('/api/telegram-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert('Error: ' + data.error);
+          return;
+        }
+        closeTelegramSettings();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function testTelegram() {
+      // Get values from input fields - if empty or masked (***), don't send them so backend uses saved config
+      let botToken = document.getElementById('telegramBotToken').value.trim();
+      const chatId = document.getElementById('telegramChatId').value.trim();
+
+      // If token shows as masked, don't send it - let backend use saved config
+      if (botToken === '***') {
+        botToken = '';
+      }
+
+      try {
+        const testBtns = document.querySelectorAll('#telegramSettingsModal button');
+        const testBtn = testBtns[0];
+        const origText = testBtn.textContent;
+        testBtn.textContent = 'SENDING...';
+        testBtn.disabled = true;
+
+        const res = await fetch('/api/telegram/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // Send empty strings if fields are empty/masked - backend will use saved config
+          body: JSON.stringify({ botToken, chatId }),
+        });
+        const data = await res.json();
+
+        testBtn.textContent = origText;
+        testBtn.disabled = false;
+
+        if (data.error) {
+          alert('Test failed: ' + data.error);
+        } else {
+          alert('✅ Test notification sent! Check your Telegram.');
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+        const testBtns = document.querySelectorAll('#telegramSettingsModal button');
+        testBtns[0].textContent = 'TEST';
+        testBtns[0].disabled = false;
+      }
+    }
+
     // ─── TAB PROJECT COMBO BOX ─────────────────────────────────────────────────
     let tabComboActiveIdx = -1;
 
@@ -2706,6 +3088,8 @@
           closeSpawnModal();
         } else if (document.getElementById('addTabModal').classList.contains('active')) {
           closeAddTabModal();
+        } else if (document.getElementById('telegramSettingsModal').classList.contains('active')) {
+          closeTelegramSettings();
         } else if (document.getElementById('confirmOverlay').classList.contains('active')) {
           closeConfirm();
         }
