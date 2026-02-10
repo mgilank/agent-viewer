@@ -50,6 +50,44 @@ Example:
 HOST=0.0.0.0 PORT=3000 npm start
 ```
 
+## Remote Access via Tailscale
+
+You can access Agent Viewer from your phone (or any device) by using [Tailscale](https://tailscale.com/).
+
+### 1. Install Tailscale on your Mac
+
+```bash
+brew install tailscale
+```
+
+Or download from [tailscale.com/download](https://tailscale.com/download).
+
+### 2. Install Tailscale on your phone
+
+Download the Tailscale app from the [App Store](https://apps.apple.com/app/tailscale/id1470499037) or [Google Play](https://play.google.com/store/apps/details?id=com.tailscale.ipn). Sign in with the same account.
+
+### 3. Start the server
+
+```bash
+npm start
+```
+
+The server binds to `0.0.0.0` by default, so it's already accessible on all network interfaces including Tailscale.
+
+### 4. Open on your phone
+
+Find your Mac's Tailscale IP (shown in the Tailscale app or via `tailscale ip`), then visit:
+
+```
+http://<tailscale-ip>:4200
+```
+
+If you have [MagicDNS](https://tailscale.com/kb/1081/magicdns) enabled, you can use your machine name instead:
+
+```
+http://<machine-name>:4200
+```
+
 ## Features
 
 - **Spawn agents** — Click `[+ SPAWN]` or press `N`, enter a project path and prompt. Each agent launches in its own tmux session running `claude`.
