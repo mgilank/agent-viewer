@@ -12,8 +12,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = process.env.PORT || 4200;
 const REGISTRY_FILE = path.join(__dirname, '.agent-registry.json');
+const TABS_FILE = path.join(__dirname, '.project-tabs.json');
 const POLL_INTERVAL = 3000;
 const SPAWN_PREFIX = 'agent-';
+
+let tabsRegistry = [];
 
 // ─── Agent Registry ──────────────────────────────────────────────────────────
 
@@ -36,6 +39,27 @@ function saveRegistry() {
     fs.writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2));
   } catch (e) {
     console.error('Failed to save registry:', e.message);
+  }
+}
+
+// ─── Tabs Registry ───────────────────────────────────────────────────────────
+
+function loadTabsRegistry() {
+  try {
+    if (fs.existsSync(TABS_FILE)) {
+      tabsRegistry = JSON.parse(fs.readFileSync(TABS_FILE, 'utf-8'));
+    }
+  } catch (e) {
+    console.error('Failed to load tabs registry:', e.message);
+    tabsRegistry = [];
+  }
+}
+
+function saveTabsRegistry() {
+  try {
+    fs.writeFileSync(TABS_FILE, JSON.stringify(tabsRegistry, null, 2));
+  } catch (e) {
+    console.error('Failed to save tabs registry:', e.message);
   }
 }
 
@@ -684,17 +708,37 @@ app.post('/api/agents/:name/send', (req, res) => {
     }
 
     const reg = registry[name];
+    if (!reg) {
+      return res.status(404).json({ error: 'Agent not found in registry' });
+    }
 
     // If agent is completed/dead, re-spawn it in the same project
-    if (reg && reg.state === 'completed') {
+    if (reg.state === 'completed') {
       const projectPath = reg.projectPath || '.';
       const claudeCmd = 'claude --chrome --dangerously-skip-permissions';
 
-      execSync(
-        `tmux new-session -d -s ${name} -c "${projectPath}" '${claudeCmd}'`,
-        { encoding: 'utf-8', timeout: 10000 }
-      );
+      // Kill any existing tmux session with this name before respawning
+      try {
+        execSync(`tmux kill-session -t ${name} 2>/dev/null`, { encoding: 'utf-8', timeout: 3000 });
+        console.log(`[RESPAWN] Killed existing session for ${name}`);
+      } catch {
+        // Session might not exist, that's fine
+        console.log(`[RESPAWN] No existing session to kill for ${name}`);
+      }
 
+      // Create new tmux session
+      try {
+        execSync(
+          `tmux new-session -d -s ${name} -c "${projectPath}" '${claudeCmd}'`,
+          { encoding: 'utf-8', timeout: 10000 }
+        );
+        console.log(`[RESPAWN] Created new session for ${name} in ${projectPath}`);
+      } catch (spawnError) {
+        console.error(`[RESPAWN] Failed to create session for ${name}:`, spawnError.message);
+        return res.status(500).json({ error: 'Failed to respawn agent: ' + spawnError.message });
+      }
+
+      // Update registry state
       reg.state = 'running';
       reg.prompt = message;
       delete reg.idleSince;
@@ -715,17 +759,16 @@ app.post('/api/agents/:name/send', (req, res) => {
     // Otherwise send to live session
     const success = sendToAgent(name, message);
     if (success) {
-      if (reg) {
-        reg.state = 'running';
-        reg.lastMessageSentAt = Date.now();
-        delete reg.idleSince;
-        saveRegistry();
-      }
+      reg.state = 'running';
+      reg.lastMessageSentAt = Date.now();
+      delete reg.idleSince;
+      saveRegistry();
       res.json({ status: 'sent' });
     } else {
       res.status(500).json({ error: 'Failed to send message' });
     }
   } catch (e) {
+    console.error('[SEND] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -876,6 +919,77 @@ app.get('/api/browse', (req, res) => {
   }
 });
 
+// ─── Project Tabs API ─────────────────────────────────────────────────────
+
+app.get('/api/tabs', (req, res) => {
+  try {
+    res.json(tabsRegistry);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tabs', (req, res) => {
+  try {
+    const { name, projectPath, color } = req.body;
+    if (!name || !projectPath) {
+      return res.status(400).json({ error: 'name and projectPath are required' });
+    }
+
+    // Check for duplicate project path
+    const existing = tabsRegistry.find(t => t.projectPath === projectPath);
+    if (existing) {
+      return res.status(400).json({ error: 'Project already saved as a tab' });
+    }
+
+    const newTab = {
+      id: Date.now().toString(36),
+      name,
+      projectPath,
+      color: color || '#00ff00',
+      createdAt: Date.now(),
+    };
+
+    tabsRegistry.push(newTab);
+    saveTabsRegistry();
+    res.json(newTab);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/tabs/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const index = tabsRegistry.findIndex(t => t.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Tab not found' });
+    }
+    tabsRegistry.splice(index, 1);
+    saveTabsRegistry();
+    res.json({ status: 'deleted' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/tabs/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, color } = req.body;
+    const tab = tabsRegistry.find(t => t.id === id);
+    if (!tab) {
+      return res.status(404).json({ error: 'Tab not found' });
+    }
+    if (name) tab.name = name;
+    if (color) tab.color = color;
+    saveTabsRegistry();
+    res.json(tab);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── SSE Endpoint ────────────────────────────────────────────────────────────
 
 const sseClients = new Set();
@@ -911,6 +1025,7 @@ function broadcastAgents() {
 // ─── Server Start ────────────────────────────────────────────────────────────
 
 loadRegistry();
+loadTabsRegistry();
 
 app.listen(PORT, HOST === 'localhost' ? '127.0.0.1' : HOST, () => {
   console.log(`\n  AGENT VIEWER`);

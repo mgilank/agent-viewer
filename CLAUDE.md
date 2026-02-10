@@ -9,8 +9,8 @@ Agent Viewer is a web-based kanban board for managing multiple Claude Code AI ag
 ## Commands
 
 ```bash
-npm start                          # Start server at http://localhost:4200
-HOST=0.0.0.0 PORT=3000 npm start  # Bind to network on custom port
+npm start                          # Start server at http://localhost:4200 (binds to 0.0.0.0 by default)
+HOST=127.0.0.1 PORT=3000 npm start # Bind to localhost only on custom port
 ```
 
 There is no build step, no test suite, and no linter configured. The app runs directly with Node.js.
@@ -45,6 +45,8 @@ Three-column kanban board (Running/Idle/Completed) with SSE-driven updates. Incl
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/agents` | List all agents with state |
+| GET | `/api/recent-projects` | List recently used project paths |
+| GET | `/api/browse?dir=PATH` | Browse directories for project selection |
 | POST | `/api/agents` | Spawn new agent |
 | POST | `/api/agents/:name/send` | Send message / respawn |
 | POST | `/api/agents/:name/upload` | Upload file to agent |
@@ -61,3 +63,4 @@ Three-column kanban board (Running/Idle/Completed) with SSE-driven updates. Incl
 - Agent session names follow the format `agent-{label}` (lowercase, hyphenated)
 - Multipart file upload parsing is done manually without libraries
 - System dependencies: **tmux** and **claude** CLI must be available on PATH
+- **Interactive prompt handling**: `waitForClaudeReady()` automatically detects and dismisses Claude's startup prompts (bypass permissions, settings errors) by simulating Down+Enter or Enter keypresses
