@@ -4,6 +4,10 @@ A kanban board for managing multiple Claude Code agents running in tmux sessions
 
 <img width="1466" height="725" alt="Screenshot 2026-02-09 at 14 54 21" src="https://github.com/user-attachments/assets/cd31b988-f649-4e92-9844-7a1ece9aa634" />
 
+Manage your agents from your mobile phone with Tailscale
+
+![IMG_7782](https://github.com/user-attachments/assets/c7298d61-dd37-4d0f-8b0a-d9d1f0231782)
+
 
 ## Prerequisites
 
