@@ -91,6 +91,9 @@ http://<machine-name>:4200
 ## Features
 
 - **Spawn agents** — Click `[+ SPAWN]` or press `N`, enter a project path and prompt. Each agent launches in its own tmux session running `claude`.
+- **Project tabs** — Save frequently-used projects as tabs for quick access and filtering. Click `+` to add the current project as a tab.
+- **Folder browser** — Click the 📁 button to visually browse and select project folders instead of typing paths.
+- **Smart project path** — When a project tab is selected, the spawn modal automatically pre-fills that project's path.
 - **Kanban columns** — Agents are sorted into Running, Idle, and Completed columns based on their state.
 - **Auto-discovery** — Existing tmux sessions running Claude are automatically detected and added to the board.
 - **Live output** — Click `VIEW OUTPUT` to see the full terminal output with ANSI color rendering.
