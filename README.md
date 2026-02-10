@@ -97,7 +97,7 @@ http://<machine-name>:4200
 - **Kanban columns** — Agents are sorted into Running, Idle, and Completed columns based on their state.
 - **Auto-discovery** — Existing tmux sessions running Claude are automatically detected and added to the board.
 - **Live output** — Click `VIEW OUTPUT` to see the full terminal output with ANSI color rendering.
-- **Send messages** — Type in the prompt field on any card and press `Ctrl+Enter` to send follow-up messages to an agent.
+- **Send messages** — Type in the prompt field on any card and press `Enter` to send follow-up messages to an agent (`Shift+Enter` inserts a new line).
 - **File uploads** — Drag and drop files onto a card or click `FILE` to send files to an agent.
 - **Re-spawn** — Completed agents can be re-spawned with a new prompt from the same project directory.
 - **Attach** — Click `ATTACH` to copy the `tmux attach` command for direct terminal access.

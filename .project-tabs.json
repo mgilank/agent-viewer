@@ -1,23 +1,16 @@
 [
   {
-    "id": "mlgl5shm",
-    "name": "Stockbro",
+    "id": "mlgn4bof",
+    "name": "33.saham-buddy",
     "projectPath": "/Volumes/Vibe_NVMe/Code/33.saham-buddy",
     "color": "#00ff00",
-    "createdAt": 1770727040122
+    "createdAt": 1770730330911
   },
   {
-    "id": "mlgm5t2e",
-    "name": "AgentViewer",
-    "projectPath": "/Volumes/Vibe_NVMe/D3V/AgentViewer",
+    "id": "mlgopw4g",
+    "name": "bench check",
+    "projectPath": "/Volumes/Vibe_NVMe/D3V/1.ujione-kelas-sveltekit",
     "color": "#ff79c6",
-    "createdAt": 1770728720486
-  },
-  {
-    "id": "mlgmu48p",
-    "name": "10.FE-user-ujian-unsoed",
-    "projectPath": "/Volumes/Vibe_NVMe/D3V/10.FE-user-ujian-unsoed",
-    "color": "#00ff00",
-    "createdAt": 1770729854713
+    "createdAt": 1770733016800
   }
 ]
