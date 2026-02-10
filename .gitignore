@@ -1,2 +1,4 @@
 node_modules/
 .agent-registry.json
+.telegram-config.json
+.project-tabs.json

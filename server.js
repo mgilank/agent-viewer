@@ -559,6 +559,14 @@ function detectAgentState(sessionName, sessionsCache) {
 
   const recentText = lines.slice(-8).map(l => l.trim()).join('\n');
 
+  // Check for idle input prompt FIRST (before "esc to interrupt" check)
+  // Claude Code shows "esc to interrupt" even when idle at prompt, so we must
+  // check for the actual prompt state first
+  const lastRawLine = lines[lines.length - 1].trim();
+  if (/^>\s*$/.test(lastRawLine) || /^❯\s*$/.test(lastRawLine) || /^\$\s*$/.test(lastRawLine)) {
+    return 'idle';
+  }
+
   // Claude Code's status bar shows "esc to interrupt" only when actively running
   if (/esc to interrupt/i.test(recentText)) {
     return 'running';

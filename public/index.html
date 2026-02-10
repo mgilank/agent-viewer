@@ -422,24 +422,6 @@
       border: 1px solid var(--dim);
     }
 
-    .card-titlebar .expand-btn {
-      background: none;
-      border: 1px solid var(--amber);
-      color: var(--amber);
-      padding: 2px 8px;
-      font-size: 10px;
-      font-family: var(--font);
-      cursor: pointer;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      transition: all 0.1s;
-    }
-
-    .card-titlebar .expand-btn:hover {
-      background: var(--amber);
-      color: var(--bg);
-    }
-
     .card-body {
       padding: 10px 12px;
       font-size: 11px;
@@ -477,6 +459,37 @@
 
     .card.expanded .card-body .activity.activity-full {
       /* When showing full output, use full content */
+    }
+
+    /* Activity expand button overlay */
+    .activity {
+      position: relative;
+    }
+
+    .activity-expand-btn {
+      position: sticky;
+      top: 0;
+      float: right;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid var(--amber);
+      color: var(--amber);
+      padding: 3px 10px;
+      font-size: 9px;
+      font-family: var(--font);
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.1s;
+      z-index: 10;
+      opacity: 0.9;
+      margin: 4px;
+    }
+
+    .activity-expand-btn:hover {
+      background: var(--amber);
+      color: var(--bg);
+      opacity: 1;
     }
       line-height: 1.5;
     }
@@ -1351,12 +1364,6 @@
         padding: 3px 8px;
       }
 
-      .card-titlebar .expand-btn {
-        font-size: 10px;
-        padding: 4px 10px;
-        min-height: 32px;
-      }
-
       .card-body {
         padding: 12px 14px;
         font-size: 12px;
@@ -1366,6 +1373,12 @@
         font-size: 11px;
         max-height: 60px;
         border-radius: 2px;
+      }
+
+      .activity-expand-btn {
+        font-size: 10px;
+        padding: 4px 10px;
+        min-height: 32px;
       }
 
       /* Prompt input - bigger for touch */
@@ -1992,7 +2005,10 @@
       }
 
       const activityBlock = lastActHtml
-        ? `<div class="activity" id="activity-${agent.name}" data-last-activity="${escapeHtml(agent.lastActivity || '')}">${lastActHtml}</div>`
+        ? `<div class="activity" id="activity-${agent.name}" data-last-activity="${escapeHtml(agent.lastActivity || '')}">
+            <button class="activity-expand-btn" onclick="event.stopPropagation();toggleCardExpand('${agent.name}')">${isExpanded ? 'COLLAPSE' : 'EXPAND'}</button>
+            ${lastActHtml}
+          </div>`
         : '';
 
       // Prompt input for all agents
@@ -2054,10 +2070,7 @@
          ${dropHandlers}>
       <div class="card-titlebar">
         <span>${escapeHtml(agent.label)}</span>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="expand-btn" onclick="event.stopPropagation();toggleCardExpand('${agent.name}')">${isExpanded ? 'COLLAPSE' : 'EXPAND'}</button>
-          <span class="state-badge">${agent.state.toUpperCase()}</span>
-        </div>
+        <span class="state-badge">${agent.state.toUpperCase()}</span>
       </div>
       <div class="card-body">
         ${metaLines}
@@ -2376,10 +2389,8 @@
           const card = document.querySelector(`[data-name="${agentName}"]`);
           if (card) {
             card.classList.remove('expanded');
-            const expandBtn = card.querySelector('.expand-btn');
-            if (expandBtn) expandBtn.textContent = 'EXPAND';
 
-            // Restore original activity content
+            // Restore original activity content (includes the button)
             const activityEl = document.getElementById(`activity-${agentName}`);
             if (activityEl && originalActivityContent.has(agentName)) {
               activityEl.innerHTML = originalActivityContent.get(agentName);
@@ -2397,10 +2408,8 @@
           const card = document.querySelector(`[data-name="${agentName}"]`);
           if (card) {
             card.classList.add('expanded');
-            const expandBtn = card.querySelector('.expand-btn');
-            if (expandBtn) expandBtn.textContent = 'COLLAPSE';
 
-            // Store original content before replacing
+            // Store original content (including button) before replacing
             const activityEl = document.getElementById(`activity-${agentName}`);
             if (activityEl && !originalActivityContent.has(agentName)) {
               originalActivityContent.set(agentName, activityEl.innerHTML);
@@ -2414,8 +2423,6 @@
             const card2 = document.querySelector(`[data-name="${agentName}"]`);
             if (card2) {
               card2.classList.add('expanded');
-              const btn2 = card2.querySelector('.expand-btn');
-              if (btn2) btn2.textContent = 'COLLAPSE';
             }
           }
         } finally {
@@ -2442,7 +2449,9 @@
       }
 
       const savedScrollTop = activityEl.scrollTop;
-      activityEl.innerHTML = data.raw ? ansiToHtml(data.raw) : escapeHtml(data.output || '(no output)');
+      // Replace content but keep the expand button at the top
+      const outputHtml = data.raw ? ansiToHtml(data.raw) : escapeHtml(data.output || '(no output)');
+      activityEl.innerHTML = `<button class="activity-expand-btn" onclick="event.stopPropagation();toggleCardExpand('${agentName}')">COLLAPSE</button>${outputHtml}`;
       activityEl.scrollTop = savedScrollTop;
     }
 
