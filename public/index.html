@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
 <title>AGENT VIEWER</title>
 <style>
 /* ─── RESET & BASE ──────────────────────────────────────────────────── */
@@ -279,20 +282,6 @@ header .status-bar .dot {
   display: block;
 }
 
-.card .upload-status {
-  display: none;
-  padding: 6px 10px;
-  font-size: 11px;
-  letter-spacing: 1px;
-  border-top: 1px solid var(--border);
-  color: var(--green);
-  background: rgba(0, 255, 0, 0.03);
-}
-
-.card .upload-status.active {
-  display: block;
-}
-
 
 /* ─── CARD PROMPT INPUT ─────────────────────────────────────────────── */
 .card-prompt {
@@ -488,6 +477,67 @@ header .status-bar .dot {
 .form-field textarea {
   height: 100px;
   resize: vertical;
+}
+
+/* ─── Project Path Combo Box ─────────────────────────────── */
+.combo-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+.combo-wrapper input {
+  flex: 1;
+}
+.combo-toggle {
+  background: #111;
+  border: 1px solid var(--border);
+  border-left: none;
+  color: var(--dim);
+  font-size: 10px;
+  padding: 0 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.combo-toggle:hover {
+  color: var(--green);
+}
+.combo-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+.combo-dropdown.open {
+  display: block;
+}
+.combo-option {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--dim);
+  cursor: pointer;
+  font-family: var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combo-option:hover,
+.combo-option.active {
+  background: rgba(0, 255, 65, 0.08);
+  color: var(--green);
+}
+.combo-empty {
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--dim);
+  font-style: italic;
 }
 
 .modal-actions {
@@ -705,6 +755,64 @@ header .status-bar .dot {
   text-transform: uppercase;
 }
 
+/* ─── MOBILE TAB BAR ───────────────────────────────────────────────── */
+.mobile-tabs {
+  display: none;
+  border-bottom: 2px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.mobile-tabs .tab-bar {
+  display: flex;
+}
+
+.mobile-tabs .tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--dim);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 14px 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tabs .tab.active {
+  color: var(--white);
+  border-bottom-color: var(--white);
+}
+
+.mobile-tabs .tab[data-tab="running"].active {
+  color: var(--green);
+  border-bottom-color: var(--green);
+}
+
+.mobile-tabs .tab[data-tab="idle"].active {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+}
+
+.mobile-tabs .tab[data-tab="completed"].active {
+  color: var(--dim);
+  border-bottom-color: var(--dim);
+}
+
+.mobile-tabs .tab .tab-count {
+  font-weight: 400;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 /* ─── MOBILE FLOAT BUTTON ───────────────────────────────────────────── */
 .fab {
   display: none;
@@ -723,30 +831,163 @@ header .status-bar .dot {
   z-index: 100;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 255, 0, 0.3);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fab:active {
+  transform: scale(0.92);
 }
 
 /* ─── MOBILE ────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .board {
-    flex-direction: column;
+  html, body {
+    font-size: 14px;
+    -webkit-text-size-adjust: 100%;
   }
 
-  .column {
-    border-right: none;
-    border-bottom: 2px solid var(--border);
-    min-height: auto;
+  /* Disable scanline on mobile for perf/battery */
+  body::after {
+    display: none;
   }
 
-  .column-body {
-    min-height: 100px;
+  /* Safe area insets for notched phones */
+  header {
+    padding: 12px 16px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  header h1 {
+    font-size: 15px;
+    letter-spacing: 2px;
+  }
+
+  header .status-bar {
+    font-size: 10px;
   }
 
   header .spawn-btn {
     display: none;
   }
 
+  /* Show mobile tab bar */
+  .mobile-tabs {
+    display: block;
+  }
+
+  /* Tab-based column switching */
+  .board {
+    flex-direction: column;
+    min-height: calc(100vh - 120px);
+  }
+
+  .column {
+    border-right: none;
+    border-bottom: none;
+    min-height: auto;
+    display: none;
+    flex: 1;
+  }
+
+  .column.mobile-active {
+    display: flex;
+    flex: 1;
+  }
+
+  .column-header {
+    display: none;
+  }
+
+  .column-body {
+    min-height: calc(100vh - 160px);
+    padding: 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: 96px; /* room for FAB */
+    gap: 14px;
+  }
+
+  /* FAB with safe area */
   .fab {
     display: flex;
+    bottom: max(24px, env(safe-area-inset-bottom, 24px));
+    right: max(24px, env(safe-area-inset-right, 24px));
+    width: 60px;
+    height: 60px;
+    font-size: 28px;
+  }
+
+  /* Card improvements for touch */
+  .card {
+    border-radius: 4px;
+    cursor: default;
+  }
+
+  .card-titlebar {
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+
+  .card-titlebar .state-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  .card-body {
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+
+  .card-body .activity {
+    font-size: 11px;
+    max-height: 60px;
+    border-radius: 2px;
+  }
+
+  /* Prompt input - bigger for touch */
+  .card-prompt {
+    padding: 10px;
+  }
+
+  .card-prompt .prompt-prefix {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .card-prompt textarea {
+    font-size: 14px;
+    padding: 10px;
+    height: 42px;
+    /* iOS zoom prevention */
+    border-radius: 0;
+    -webkit-appearance: none;
+  }
+
+  /* Action buttons - touch friendly */
+  .card-actions {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .card-actions button {
+    padding: 10px 16px;
+    font-size: 11px;
+    min-height: 40px;
+    border-radius: 2px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .card-actions button:active {
+    opacity: 0.7;
+  }
+
+  /* Modal - full screen with safe areas */
+  .modal-overlay {
+    align-items: stretch;
+    justify-content: stretch;
   }
 
   .modal {
@@ -754,107 +995,122 @@ header .status-bar .dot {
     max-width: 100%;
     height: 100%;
     max-height: 100%;
+    border: none;
+    display: flex;
+    flex-direction: column;
   }
 
-  .card-actions {
-    flex-wrap: wrap;
+  .modal-header {
+    padding: 14px 16px;
+    padding-left: max(16px, env(safe-area-inset-left));
   }
 
-  .card-actions button {
-    padding: 8px 14px;
+  .modal-body {
+    padding: 16px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .form-field input,
+  .form-field textarea {
+    font-size: 16px; /* prevents iOS zoom on focus */
+    padding: 12px;
+  }
+
+  .form-field textarea {
+    height: 120px;
+  }
+
+  .modal-actions {
+    padding: 14px 16px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .modal-actions button {
+    padding: 12px 24px;
+    min-height: 44px;
+    font-size: 13px;
+    flex: 1;
+  }
+
+  /* Output viewer - mobile optimized */
+  .output-header {
+    padding: 14px 16px;
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
     font-size: 11px;
   }
-}
 
-/* ─── FOLDER PICKER ────────────────────────────────────────────────── */
-.browse-btn {
-  padding: 8px 12px;
-  background: none;
-  border: 1px solid var(--border);
-  border-left: none;
-  color: var(--green);
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  cursor: pointer;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
+  .output-header .close-btn {
+    padding: 8px 16px;
+    font-size: 12px;
+    min-height: 36px;
+  }
 
-.browse-btn:hover {
-  background: var(--green);
-  color: var(--bg);
-}
+  .output-content {
+    padding: 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    font-size: 11px;
+    -webkit-overflow-scrolling: touch;
+  }
 
-.folder-picker {
-  display: none;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  margin-top: 6px;
-  max-height: 250px;
-  overflow-y: auto;
-}
+  .output-prompt {
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
 
-.folder-picker.active {
-  display: block;
-}
+  .output-prompt .prefix {
+    padding: 12px;
+    font-size: 14px;
+  }
 
-.folder-picker .fp-header {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  font-size: 11px;
-  color: var(--green);
-  word-break: break-all;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
+  .output-prompt input {
+    font-size: 16px; /* prevents iOS zoom */
+    padding: 12px;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
 
-.folder-picker .fp-header .fp-select {
-  background: none;
-  border: 1px solid var(--green);
-  color: var(--green);
-  font-family: var(--font);
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 10px;
-  cursor: pointer;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
+  .output-prompt button {
+    padding: 12px 18px;
+    font-size: 12px;
+    min-height: 44px;
+  }
 
-.folder-picker .fp-header .fp-select:hover {
-  background: var(--green);
-  color: var(--bg);
-}
+  /* Confirm dialog */
+  .confirm-box {
+    margin: 16px;
+    padding: 24px 20px;
+    max-width: calc(100vw - 32px);
+  }
 
-.folder-picker .fp-item {
-  padding: 6px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #111;
-  color: var(--white);
-}
+  .confirm-box p {
+    font-size: 14px;
+  }
 
-.folder-picker .fp-item:hover {
-  background: #111;
-  color: var(--green);
-}
+  .confirm-box button {
+    padding: 12px 24px;
+    min-height: 44px;
+    font-size: 12px;
+  }
 
-.folder-picker .fp-item.fp-parent {
-  color: var(--dim);
-}
+  /* Empty state */
+  .empty-state {
+    padding: 60px 20px;
+    font-size: 13px;
+  }
 
-.folder-picker .fp-empty {
-  padding: 12px 10px;
-  font-size: 11px;
-  color: #333;
-  text-align: center;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  /* Disable drag on mobile */
+  .card[draggable] {
+    -webkit-user-drag: none;
+  }
 }
 
 /* ─── SCROLLBAR ─────────────────────────────────────────────────────── */
@@ -875,6 +1131,21 @@ header .status-bar .dot {
   </div>
   <button class="spawn-btn" onclick="openSpawnModal()">[+ SPAWN] <span style="color:var(--dim);font-size:10px;font-weight:400">(N)</span></button>
 </header>
+
+<!-- ─── MOBILE TAB BAR ─────────────────────────────────────────────── -->
+<div class="mobile-tabs">
+  <div class="tab-bar">
+    <button class="tab active" data-tab="running" onclick="switchTab('running')">
+      RUN <span class="tab-count" id="tabRunCount">[0]</span>
+    </button>
+    <button class="tab" data-tab="idle" onclick="switchTab('idle')">
+      IDLE <span class="tab-count" id="tabIdleCount">[0]</span>
+    </button>
+    <button class="tab" data-tab="completed" onclick="switchTab('completed')">
+      DONE <span class="tab-count" id="tabDoneCount">[0]</span>
+    </button>
+  </div>
+</div>
 
 <!-- ─── KANBAN BOARD ───────────────────────────────────────────────── -->
 <div class="board">
@@ -924,10 +1195,16 @@ header .status-bar .dot {
         <label>PROJECT PATH</label>
         <div class="input-row">
           <span class="input-prefix">&gt;_</span>
-          <input type="text" id="spawnProject" placeholder="/Users/gogo/Code/myproject" />
-          <button class="browse-btn" onclick="toggleFolderPicker()">BROWSE</button>
+          <div class="combo-wrapper">
+            <input type="text" id="spawnProject" placeholder="/Users/gogo/Code/myproject"
+                   autocomplete="off"
+                   oninput="filterRecentProjects()"
+                   onfocus="filterRecentProjects()"
+                   onkeydown="comboKeydown(event)" />
+            <button type="button" class="combo-toggle" onclick="toggleProjectDropdown()" title="Recent projects">&#9660;</button>
+            <div class="combo-dropdown" id="projectDropdown"></div>
+          </div>
         </div>
-        <div class="folder-picker" id="folderPicker"></div>
       </div>
       <div class="form-field">
         <label>PROMPT</label>
@@ -1033,6 +1310,16 @@ function renderBoard() {
   // Show/hide clear all button
   document.getElementById('clearAllBtn').style.display = completed.length > 0 ? '' : 'none';
 
+  // Update mobile tab counts
+  updateMobileTabs();
+
+  // Keep mobile column visibility in sync
+  if (isMobile()) {
+    document.querySelectorAll('.column').forEach(col => {
+      col.classList.toggle('mobile-active', col.dataset.state === activeTab);
+    });
+  }
+
   // Update output viewer if open
   if (currentOutputAgent) {
     updateOutputViewer();
@@ -1124,7 +1411,7 @@ function renderCard(agent) {
       <div class="card-actions">
         <button class="btn-send" onclick="sendPrompt('${agent.name}')">SEND</button>
         <button onclick="document.getElementById('file-${agent.name}').click()">FILE</button>
-        <button onclick="copyAttach('${agent.name}')" title="Copy tmux attach command to clipboard">TERMINAL</button>
+        <button onclick="copyAttach('${agent.name}')">ATTACH</button>
         <button class="btn-stop" onclick="confirmStop('${agent.name}')">STOP</button>
         <button onclick="openOutputViewer('${agent.name}')">VIEW OUTPUT</button>
       </div>`;
@@ -1162,7 +1449,6 @@ function renderCard(agent) {
       </div>
       ${promptBlock}
       ${fileInput}
-      <div class="upload-status" id="upload-status-${agent.name}"></div>
       ${dropHint}
       ${actions}
     </div>`;
@@ -1226,8 +1512,6 @@ async function uploadFile(agentName, input) {
   const file = input.files[0];
   if (!file) return;
 
-  showUploadStatus(agentName, file.name, 'uploading');
-
   const formData = new FormData();
   formData.append('file', file);
 
@@ -1238,12 +1522,10 @@ async function uploadFile(agentName, input) {
     });
     const data = await res.json();
     if (data.error) {
-      showUploadStatus(agentName, file.name, 'error');
-    } else {
-      showUploadStatus(agentName, file.name, 'sent');
+      alert('Upload error: ' + data.error);
     }
   } catch (e) {
-    showUploadStatus(agentName, file.name, 'error');
+    alert('Upload failed: ' + e.message);
   }
   // Reset the input so the same file can be re-selected
   input.value = '';
@@ -1252,14 +1534,15 @@ async function uploadFile(agentName, input) {
 function copyAttach(agentName) {
   const cmd = `tmux attach -t ${agentName}`;
   navigator.clipboard.writeText(cmd).then(() => {
+    // Brief visual feedback on the button
     const btns = document.querySelectorAll(`[data-name="${agentName}"] .card-actions button`);
     for (const btn of btns) {
-      if (btn.textContent === 'TERMINAL') {
-        btn.textContent = 'COPIED CMD!';
+      if (btn.textContent === 'ATTACH') {
+        btn.textContent = 'COPIED!';
         btn.style.borderColor = 'var(--green)';
         btn.style.color = 'var(--green)';
         setTimeout(() => {
-          btn.textContent = 'TERMINAL';
+          btn.textContent = 'ATTACH';
           btn.style.borderColor = '';
           btn.style.color = '';
         }, 1500);
@@ -1267,29 +1550,6 @@ function copyAttach(agentName) {
       }
     }
   });
-}
-
-function showUploadStatus(agentName, filename, state) {
-  const el = document.getElementById('upload-status-' + agentName);
-  if (!el) return;
-
-  const short = filename.length > 30 ? filename.substring(0, 27) + '...' : filename;
-
-  if (state === 'uploading') {
-    el.textContent = `UPLOADING: ${short}`;
-    el.style.color = 'var(--amber)';
-    el.classList.add('active');
-  } else if (state === 'sent') {
-    el.textContent = `SENT: ${short}`;
-    el.style.color = 'var(--green)';
-    el.classList.add('active');
-    setTimeout(() => el.classList.remove('active'), 5000);
-  } else {
-    el.textContent = `FAILED: ${short}`;
-    el.style.color = 'var(--red)';
-    el.classList.add('active');
-    setTimeout(() => el.classList.remove('active'), 5000);
-  }
 }
 
 async function stopAgent(agentName) {
@@ -1415,72 +1675,102 @@ function openSpawnModal() {
   document.getElementById('spawnProject').value = '';
   document.getElementById('spawnPrompt').value = '';
   document.getElementById('spawnModal').classList.add('active');
-  document.getElementById('spawnProject').focus();
+  loadRecentProjects().then(() => {
+    document.getElementById('spawnProject').focus();
+  });
 }
 
 function closeSpawnModal() {
   document.getElementById('spawnModal').classList.remove('active');
-  document.getElementById('folderPicker').classList.remove('active');
+  closeProjectDropdown();
 }
 
-// ─── FOLDER PICKER ─────────────────────────────────────────────────────
-async function toggleFolderPicker() {
-  const picker = document.getElementById('folderPicker');
-  if (picker.classList.contains('active')) {
-    picker.classList.remove('active');
+// ─── RECENT PROJECTS COMBO BOX ─────────────────────────────────────────
+let recentProjects = [];
+let comboActiveIdx = -1;
+
+async function loadRecentProjects() {
+  try {
+    const res = await fetch('/api/recent-projects');
+    recentProjects = await res.json();
+  } catch (e) {
+    recentProjects = [];
+  }
+}
+
+function renderProjectDropdown(items) {
+  const dd = document.getElementById('projectDropdown');
+  comboActiveIdx = -1;
+  if (!items.length) {
+    dd.innerHTML = '<div class="combo-empty">No recent projects</div>';
+  } else {
+    dd.innerHTML = items.map((p, i) =>
+      `<div class="combo-option" data-index="${i}" onmousedown="selectProject('${p.replace(/'/g, "\\'")}')">${p}</div>`
+    ).join('');
+  }
+  dd.classList.add('open');
+}
+
+function filterRecentProjects() {
+  const q = document.getElementById('spawnProject').value.toLowerCase();
+  const filtered = q ? recentProjects.filter(p => p.toLowerCase().includes(q)) : recentProjects;
+  renderProjectDropdown(filtered);
+}
+
+function toggleProjectDropdown() {
+  const dd = document.getElementById('projectDropdown');
+  if (dd.classList.contains('open')) {
+    closeProjectDropdown();
+  } else {
+    filterRecentProjects();
+    document.getElementById('spawnProject').focus();
+  }
+}
+
+function closeProjectDropdown() {
+  document.getElementById('projectDropdown').classList.remove('open');
+  comboActiveIdx = -1;
+}
+
+function selectProject(p) {
+  document.getElementById('spawnProject').value = p;
+  closeProjectDropdown();
+}
+
+function comboKeydown(e) {
+  const dd = document.getElementById('projectDropdown');
+  const opts = dd.querySelectorAll('.combo-option');
+  if (!dd.classList.contains('open') || !opts.length) {
+    if (e.key === 'Escape') closeProjectDropdown();
     return;
   }
-  const current = document.getElementById('spawnProject').value.trim() || '';
-  await loadFolderPicker(current || undefined);
-}
-
-async function loadFolderPicker(dir) {
-  const picker = document.getElementById('folderPicker');
-  try {
-    const url = dir ? `/api/browse?dir=${encodeURIComponent(dir)}` : '/api/browse';
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.error) {
-      picker.innerHTML = `<div class="fp-empty">${escapeHtml(data.error)}</div>`;
-      picker.classList.add('active');
-      return;
-    }
-
-    let html = `<div class="fp-header">
-      <span>${escapeHtml(data.current)}</span>
-      <button class="fp-select" onclick="selectFolder('${escapeAttr(data.current)}')">SELECT</button>
-    </div>`;
-
-    if (data.current !== data.parent) {
-      html += `<div class="fp-item fp-parent" onclick="loadFolderPicker('${escapeAttr(data.parent)}')">..</div>`;
-    }
-
-    if (data.dirs.length === 0) {
-      html += '<div class="fp-empty">NO SUBDIRECTORIES</div>';
-    } else {
-      for (const d of data.dirs) {
-        const full = data.current === '/' ? '/' + d : data.current + '/' + d;
-        html += `<div class="fp-item" onclick="loadFolderPicker('${escapeAttr(full)}')">${escapeHtml(d)}</div>`;
-      }
-    }
-
-    picker.innerHTML = html;
-    picker.classList.add('active');
-  } catch (e) {
-    picker.innerHTML = '<div class="fp-empty">FAILED TO BROWSE</div>';
-    picker.classList.add('active');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    comboActiveIdx = Math.min(comboActiveIdx + 1, opts.length - 1);
+    updateComboActive(opts);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    comboActiveIdx = Math.max(comboActiveIdx - 1, 0);
+    updateComboActive(opts);
+  } else if (e.key === 'Enter' && comboActiveIdx >= 0) {
+    e.preventDefault();
+    opts[comboActiveIdx].onmousedown();
+  } else if (e.key === 'Escape') {
+    closeProjectDropdown();
   }
 }
 
-function selectFolder(path) {
-  document.getElementById('spawnProject').value = path;
-  document.getElementById('folderPicker').classList.remove('active');
-  document.getElementById('spawnPrompt').focus();
+function updateComboActive(opts) {
+  opts.forEach((el, i) => el.classList.toggle('active', i === comboActiveIdx));
+  if (comboActiveIdx >= 0 && opts[comboActiveIdx]) {
+    opts[comboActiveIdx].scrollIntoView({ block: 'nearest' });
+  }
 }
 
-function escapeAttr(str) {
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.combo-wrapper')) closeProjectDropdown();
+});
 
 // ─── DRAG AND DROP ─────────────────────────────────────────────────────
 function onDragStart(event, agentName) {
@@ -1659,21 +1949,15 @@ function onCardFileDrop(event, agentName) {
   const formData = new FormData();
   formData.append('file', file);
 
-  showUploadStatus(agentName, file.name, 'uploading');
-
   fetch(`/api/agents/${agentName}/upload`, {
     method: 'POST',
     body: formData,
   })
   .then(r => r.json())
   .then(data => {
-    if (data.error) {
-      showUploadStatus(agentName, file.name, 'error');
-    } else {
-      showUploadStatus(agentName, file.name, 'sent');
-    }
+    if (data.error) console.error('Drop upload error:', data.error);
   })
-  .catch(() => showUploadStatus(agentName, file.name, 'error'));
+  .catch(e => console.error('Drop upload failed:', e));
 }
 
 // ─── HELPERS ───────────────────────────────────────────────────────────
@@ -1694,9 +1978,52 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ─── MOBILE TAB SWITCHING ───────────────────────────────────────────
+let activeTab = 'running';
+
+function isMobile() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.mobile-tabs .tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.querySelectorAll('.column').forEach(col => {
+    col.classList.toggle('mobile-active', col.dataset.state === tab);
+  });
+}
+
+function updateMobileTabs() {
+  const running = agents.filter(a => a.state === 'running');
+  const idle = agents.filter(a => a.state === 'idle');
+  const completed = agents.filter(a => a.state === 'completed');
+
+  const tabRun = document.getElementById('tabRunCount');
+  const tabIdle = document.getElementById('tabIdleCount');
+  const tabDone = document.getElementById('tabDoneCount');
+  if (tabRun) tabRun.textContent = `[${running.length}]`;
+  if (tabIdle) tabIdle.textContent = `[${idle.length}]`;
+  if (tabDone) tabDone.textContent = `[${completed.length}]`;
+}
+
+function initMobileLayout() {
+  if (isMobile()) {
+    switchTab(activeTab);
+  } else {
+    document.querySelectorAll('.column').forEach(col => {
+      col.classList.remove('mobile-active');
+    });
+  }
+}
+
+window.addEventListener('resize', initMobileLayout);
+
 // ─── INIT ──────────────────────────────────────────────────────────────
 fetchAgents();
 connectSSE();
+initMobileLayout();
 </script>
 </body>
 </html>

@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 const PORT = process.env.PORT || 4200;
 const REGISTRY_FILE = path.join(__dirname, '.agent-registry.json');
 const POLL_INTERVAL = 3000;
@@ -634,6 +634,25 @@ function getAllAgents() {
 }
 
 // ─── API Routes ──────────────────────────────────────────────────────────────
+
+app.get('/api/recent-projects', (req, res) => {
+  try {
+    const seen = new Map(); // path -> most recent createdAt
+    for (const agent of Object.values(registry)) {
+      if (agent.projectPath) {
+        const existing = seen.get(agent.projectPath) || 0;
+        const ts = agent.createdAt || 0;
+        if (ts > existing) seen.set(agent.projectPath, ts);
+      }
+    }
+    const sorted = [...seen.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([p]) => p);
+    res.json(sorted);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.get('/api/agents', (req, res) => {
   try {
