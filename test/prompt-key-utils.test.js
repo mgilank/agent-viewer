@@ -5,6 +5,7 @@ const {
   shouldSendPromptOnEnter,
   getOutputControlKey,
   resolveOutputOverlayKeyAction,
+  shouldFastRefreshOutput,
 } = require('../public/prompt-key-utils.js');
 
 test('sends on plain Enter', () => {
@@ -87,4 +88,15 @@ test('does not resolve overlay key action while IME composition is active', () =
     resolveOutputOverlayKeyAction({ key: 'Enter', keyCode: 229 }, '', true),
     null
   );
+});
+
+test('uses fast output refresh for key payloads', () => {
+  assert.equal(shouldFastRefreshOutput({ key: 'Down' }), true);
+  assert.equal(shouldFastRefreshOutput({ key: 'Escape' }), true);
+});
+
+test('does not use fast output refresh for message payloads', () => {
+  assert.equal(shouldFastRefreshOutput({ message: 'hello' }), false);
+  assert.equal(shouldFastRefreshOutput({}), false);
+  assert.equal(shouldFastRefreshOutput(null), false);
 });

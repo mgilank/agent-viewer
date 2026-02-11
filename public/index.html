@@ -1918,6 +1918,7 @@
     let agents = [];
     let currentOutputAgent = null;
     let outputPollTimer = null;
+    let outputRefreshBurstTimer = null;
     let pendingConfirm = null;
     let draggedAgentName = null;
 
@@ -2407,7 +2408,7 @@
 
       // Poll for output updates
       if (outputPollTimer) clearInterval(outputPollTimer);
-      outputPollTimer = setInterval(updateOutputViewer, 3000);
+      outputPollTimer = setInterval(updateOutputViewer, 750);
     }
 
     async function updateOutputViewer() {
@@ -2431,6 +2432,24 @@
         clearInterval(outputPollTimer);
         outputPollTimer = null;
       }
+      if (outputRefreshBurstTimer) {
+        clearTimeout(outputRefreshBurstTimer);
+        outputRefreshBurstTimer = null;
+      }
+    }
+
+    function requestFastOutputRefresh() {
+      if (!currentOutputAgent) return;
+
+      // Immediate refresh gives instant UI feedback for selection movement.
+      updateOutputViewer();
+
+      // Trailing refresh catches the terminal frame right after key dispatch.
+      if (outputRefreshBurstTimer) clearTimeout(outputRefreshBurstTimer);
+      outputRefreshBurstTimer = setTimeout(() => {
+        outputRefreshBurstTimer = null;
+        updateOutputViewer();
+      }, 120);
     }
 
     async function sendOutputPayload(payload, restoreInput, restoreValue) {
@@ -2454,6 +2473,12 @@
         }
         if (data.status === 'respawned') {
           console.log('Agent respawned successfully');
+        }
+        const shouldFastRefresh = window.promptKeyUtils && window.promptKeyUtils.shouldFastRefreshOutput
+          ? window.promptKeyUtils.shouldFastRefreshOutput(payload)
+          : !!(payload && payload.key);
+        if (shouldFastRefresh) {
+          requestFastOutputRefresh();
         }
         return true;
       } catch (e) {

@@ -55,9 +55,15 @@
     return controlKey ? { type: 'send-key', key: controlKey } : null;
   }
 
+  function shouldFastRefreshOutput(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    return typeof payload.key === 'string' && payload.key.trim() !== '';
+  }
+
   return {
     shouldSendPromptOnEnter,
     getOutputControlKey,
     resolveOutputOverlayKeyAction,
+    shouldFastRefreshOutput,
   };
 });
