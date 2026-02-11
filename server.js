@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const https = require('https');
+const { normalizeAgentSendPayload } = require('./agent-send-utils');
 
 const app = express();
 app.use(express.json());
@@ -507,6 +508,31 @@ function sendToAgent(sessionName, message) {
   }
 }
 
+function sendKeyToAgent(sessionName, key) {
+  const allowedKeys = {
+    Up: 'Up',
+    Down: 'Down',
+    Enter: 'Enter',
+    Escape: 'Escape',
+  };
+
+  const tmuxKey = allowedKeys[key];
+  if (!tmuxKey) return false;
+
+  try {
+    console.log(`[SEND] key to ${sessionName}: ${tmuxKey}`);
+    execSync(`tmux send-keys -t ${sessionName} ${tmuxKey}`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    console.log('[SEND] key success');
+    return true;
+  } catch (e) {
+    console.error(`[SEND] key FAILED to ${sessionName}:`, e.message);
+    return false;
+  }
+}
+
 function killAgent(sessionName) {
   try {
     execSync(`tmux kill-session -t ${sessionName} 2>/dev/null`, {
@@ -911,9 +937,9 @@ app.post('/api/agents', async (req, res) => {
 app.post('/api/agents/:name/send', (req, res) => {
   try {
     const { name } = req.params;
-    const { message } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: 'message is required' });
+    const payload = normalizeAgentSendPayload(req.body);
+    if (payload.type === 'invalid') {
+      return res.status(400).json({ error: 'message or supported key is required' });
     }
 
     const reg = registry[name];
@@ -949,7 +975,7 @@ app.post('/api/agents/:name/send', (req, res) => {
 
       // Update registry state
       reg.state = 'running';
-      reg.prompt = message;
+      reg.prompt = payload.type === 'message' ? payload.message : (reg.prompt || '');
       delete reg.idleSince;
       delete reg.completedAt;
       saveRegistry();
@@ -959,14 +985,20 @@ app.post('/api/agents/:name/send', (req, res) => {
         if (!ready) {
           console.log(`[RESPAWN] Claude not ready for ${name}, sending prompt anyway`);
         }
-        sendToAgent(name, message);
+        if (payload.type === 'key') {
+          sendKeyToAgent(name, payload.key);
+        } else {
+          sendToAgent(name, payload.message);
+        }
       });
 
       return res.json({ status: 'respawned' });
     }
 
     // Otherwise send to live session
-    const success = sendToAgent(name, message);
+    const success = payload.type === 'key'
+      ? sendKeyToAgent(name, payload.key)
+      : sendToAgent(name, payload.message);
     if (success) {
       reg.state = 'running';
       reg.lastMessageSentAt = Date.now();

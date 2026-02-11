@@ -934,11 +934,18 @@
       border-top: 2px solid var(--border);
       padding: 12px 16px;
       display: flex;
-      gap: 0;
+      flex-direction: column;
+      gap: 10px;
       flex-shrink: 0;
     }
 
-    .output-prompt .prefix {
+    .output-message-row {
+      display: flex;
+      gap: 0;
+      align-items: stretch;
+    }
+
+    .output-message-row .prefix {
       padding: 10px 12px;
       background: #111;
       border: 1px solid var(--border);
@@ -947,7 +954,7 @@
       font-size: 13px;
     }
 
-    .output-prompt input {
+    .output-message-row input {
       flex: 1;
       background: var(--input-bg);
       border: 1px solid var(--border);
@@ -958,11 +965,11 @@
       outline: none;
     }
 
-    .output-prompt input:focus {
+    .output-message-row input:focus {
       border-color: var(--green);
     }
 
-    .output-prompt button {
+    .output-send-btn {
       padding: 10px 20px;
       background: none;
       border: 1px solid var(--green);
@@ -976,8 +983,56 @@
       text-transform: uppercase;
     }
 
-    .output-prompt button:hover {
+    .output-send-btn:hover {
       background: var(--green);
+      color: var(--bg);
+    }
+
+    .output-select-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid #202020;
+      background: #060606;
+      padding: 8px 10px;
+    }
+
+    .output-select-row .select-label {
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .output-select-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .output-select-btn {
+      min-width: 56px;
+      padding: 8px 14px;
+      border: 2px solid var(--amber);
+      background: transparent;
+      color: var(--amber);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .output-select-btn.wide {
+      min-width: 84px;
+    }
+
+    .output-select-btn:hover {
+      background: var(--amber);
       color: var(--bg);
     }
 
@@ -1502,12 +1557,12 @@
         padding-right: max(10px, env(safe-area-inset-right));
       }
 
-      .output-prompt .prefix {
+      .output-message-row .prefix {
         padding: 12px;
         font-size: 14px;
       }
 
-      .output-prompt input {
+      .output-message-row input {
         font-size: 16px;
         /* prevents iOS zoom */
         padding: 12px;
@@ -1515,10 +1570,35 @@
         border-radius: 0;
       }
 
-      .output-prompt button {
+      .output-send-btn {
         padding: 12px 18px;
         font-size: 12px;
         min-height: 44px;
+      }
+
+      .output-select-row {
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .output-select-row .select-label {
+        font-size: 11px;
+        letter-spacing: 1px;
+      }
+
+      .output-select-controls {
+        gap: 6px;
+      }
+
+      .output-select-btn {
+        min-width: 52px;
+        min-height: 40px;
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+
+      .output-select-btn.wide {
+        min-width: 74px;
       }
 
       /* Confirm dialog */
@@ -1802,10 +1882,21 @@
     </div>
     <div class="output-content" id="outputContent"></div>
     <div class="output-prompt">
-      <span class="prefix">&gt;_</span>
-      <input type="text" id="outputPromptInput" placeholder="Send a message..."
-        onkeydown="if(event.key==='Enter'){sendFromOutput();}" />
-      <button onclick="sendFromOutput()">SEND</button>
+      <div class="output-message-row">
+        <span class="prefix">&gt;_</span>
+        <input type="text" id="outputPromptInput" placeholder="Send a message..."
+          onkeydown="handleOutputPromptKey(event)" />
+        <button type="button" class="output-send-btn" onclick="sendFromOutput()">SEND</button>
+      </div>
+      <div class="output-select-row">
+        <span class="select-label">SELECT:</span>
+        <div class="output-select-controls">
+          <button type="button" class="output-select-btn" onclick="sendOutputKey('Up')">↑</button>
+          <button type="button" class="output-select-btn" onclick="sendOutputKey('Down')">↓</button>
+          <button type="button" class="output-select-btn wide" onclick="sendOutputKey('Enter')">ENTER</button>
+          <button type="button" class="output-select-btn wide" onclick="sendOutputKey('Escape')">ESC</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2342,30 +2433,74 @@
       }
     }
 
+    async function sendOutputPayload(payload, restoreInput, restoreValue) {
+      if (!currentOutputAgent) return false;
+      try {
+        const res = await fetch(`/api/agents/${currentOutputAgent}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.error) {
+          // Backward-compatible behavior for older servers that only accept "message".
+          if (payload && payload.key && /message is required/i.test(data.error)) {
+            console.warn('Server does not support key payloads yet. Restart with latest server.js.');
+            return false;
+          }
+          alert('Error: ' + data.error);
+          if (restoreInput) restoreInput.value = restoreValue;
+          return false;
+        }
+        if (data.status === 'respawned') {
+          console.log('Agent respawned successfully');
+        }
+        return true;
+      } catch (e) {
+        console.error('Send from output error:', e);
+        alert('Failed to send message: ' + e.message);
+        if (restoreInput) restoreInput.value = restoreValue;
+        return false;
+      }
+    }
+
     async function sendFromOutput() {
       if (!currentOutputAgent) return;
       const input = document.getElementById('outputPromptInput');
       const message = input.value.trim();
       if (!message) return;
       input.value = '';
-      try {
-        const res = await fetch(`/api/agents/${currentOutputAgent}/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
-        });
-        const data = await res.json();
-        if (data.error) {
-          alert('Error: ' + data.error);
-          input.value = message; // Restore message on error
-        } else if (data.status === 'respawned') {
-          console.log('Agent respawned successfully');
-        }
-      } catch (e) {
-        console.error('Send from output error:', e);
-        alert('Failed to send message: ' + e.message);
-        input.value = message; // Restore message on error
+      await sendOutputPayload({ message }, input, message);
+    }
+
+    async function sendOutputKey(key) {
+      if (!key) return;
+      await sendOutputPayload({ key });
+    }
+
+    function resolveOutputOverlayAction(event) {
+      const input = document.getElementById('outputPromptInput');
+      if (!input) return null;
+
+      const resolver = window.promptKeyUtils && window.promptKeyUtils.resolveOutputOverlayKeyAction;
+      if (!resolver) return null;
+
+      const isInputFocused = document.activeElement === input;
+      return resolver(event, input.value, isInputFocused);
+    }
+
+    function handleOutputPromptKey(event) {
+      const action = resolveOutputOverlayAction(event);
+      if (!action) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (action.type === 'send-key') {
+        sendOutputKey(action.key);
+      } else if (action.type === 'send-message') {
+        sendFromOutput();
       }
+      return false;
     }
 
     // ─── INLINE CARD OUTPUT EXPAND ─────────────────────────────────────────
@@ -3087,6 +3222,22 @@
           browserSelectPath();
         }
         return;
+      }
+
+      // Output overlay selection controls (works even when input is not focused)
+      const outputOverlay = document.getElementById('outputOverlay');
+      if (outputOverlay && outputOverlay.classList.contains('active')) {
+        const action = resolveOutputOverlayAction(event);
+        if (action) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (action.type === 'send-key') {
+            sendOutputKey(action.key);
+          } else if (action.type === 'send-message') {
+            sendFromOutput();
+          }
+          return;
+        }
       }
 
       // Other overlays
