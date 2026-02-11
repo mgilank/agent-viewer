@@ -90,6 +90,24 @@ test('does not resolve overlay key action while IME composition is active', () =
   );
 });
 
+test('resolves overlay key action for x to close overlay when input is not focused', () => {
+  assert.deepEqual(
+    resolveOutputOverlayKeyAction({ key: 'x' }, '', false),
+    { type: 'close-overlay' }
+  );
+  assert.deepEqual(
+    resolveOutputOverlayKeyAction({ key: 'X' }, '', false),
+    { type: 'close-overlay' }
+  );
+});
+
+test('does not resolve x to close overlay while typing in input', () => {
+  assert.equal(
+    resolveOutputOverlayKeyAction({ key: 'x' }, 'draft', true),
+    null
+  );
+});
+
 test('uses fast output refresh for key payloads', () => {
   assert.equal(shouldFastRefreshOutput({ key: 'Down' }), true);
   assert.equal(shouldFastRefreshOutput({ key: 'Escape' }), true);

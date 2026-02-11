@@ -41,8 +41,17 @@
 
     const focused = !!isInputFocused;
     const value = typeof inputValue === 'string' ? inputValue : '';
+    const isCloseOverlayKey =
+      typeof event.key === 'string'
+      && event.key.toLowerCase() === 'x'
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey;
 
     if (!focused) {
+      if (isCloseOverlayKey) {
+        return { type: 'close-overlay' };
+      }
       const controlKey = OUTPUT_CONTROL_KEYS[event.key] || null;
       return controlKey ? { type: 'send-key', key: controlKey } : null;
     }

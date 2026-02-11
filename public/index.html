@@ -2524,6 +2524,8 @@
         sendOutputKey(action.key);
       } else if (action.type === 'send-message') {
         sendFromOutput();
+      } else if (action.type === 'close-overlay') {
+        closeOutputViewer();
       }
       return false;
     }
@@ -3260,6 +3262,8 @@
             sendOutputKey(action.key);
           } else if (action.type === 'send-message') {
             sendFromOutput();
+          } else if (action.type === 'close-overlay') {
+            closeOutputViewer();
           }
           return;
         }
